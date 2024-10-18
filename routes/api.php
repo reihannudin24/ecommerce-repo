@@ -5,29 +5,29 @@ use App\Http\Controllers\User\AddressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-
-Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register'])->name('register');
-    Route::post('/verify-email', [AuthController::class, 'VerifyEmail'])->name('verify.email');
-    Route::post('/verify-phone-number', [AuthController::class, 'VerifyPhoneNumber'])->name('verify.phone');
-    Route::post('/send-email-code', [AuthController::class, 'SendEmailCode'])->name('send.email.code');
-    Route::post('/send-phone-number-code', [AuthController::class, 'SendPhoneNumberCode'])->name('send.phone.number.code');
-    Route::post('/add-password', [AuthController::class, 'AddPassword'])->name('add.password');
-    Route::post('/add-phone-number', [AuthController::class, 'AddPhoneNumber'])->name('add.phone.number');
-    Route::post('/add-information', [AuthController::class, 'AddInformation'])->name('add.information');
-    Route::post('/login', [AuthController::class, 'Login'])->name('login');
-    Route::post('/forgot-password', [AuthController::class, 'ForgotPassword'])->name('forgot.password');
+// Routes for authentication-related actions
+Route::prefix('auth')->controller(AuthController::class)->group(function () {
+    Route::post('/register', 'register')->name('auth.register');
+    Route::post('/verify-email', 'verifyEmail')->name('auth.verify.email');
+    Route::post('/verify-phone-number', 'verifyPhoneNumber')->name('auth.verify.phone');
+    Route::post('/send-email-code', 'sendEmailCode')->name('auth.send.email.code');
+    Route::post('/send-phone-number-code', 'sendPhoneNumberCode')->name('auth.send.phone.number.code');
+    Route::post('/add-password', 'addPassword')->name('auth.add.password');
+    Route::post('/add-phone-number', 'addPhoneNumber')->name('auth.add.phone.number');
+    Route::post('/add-information', 'addInformation')->name('auth.add.information');
+    Route::post('/login', 'login')->name('auth.login');
+    Route::post('/forgot-password', 'forgotPassword')->name('auth.forgot.password');
 });
 
-
-Route::prefix('address')->group(function (){
-   Route::post('/create', [AddressController::class, 'create'])->name('address.create');
-   Route::post('/update/{id}', [AddressController::class, 'update'])->name('address.update');
-   Route::post('/delete/{id}', [AddressController::class, 'delete'])->name('address.delete');
-   Route::post('/show/{id}', [AddressController::class, 'show'])->name('address.show');
+// Routes for address-related actions
+Route::prefix('address')->controller(AddressController::class)->group(function () {
+    Route::post('/create', 'create')->name('address.create');
+    Route::put('/update/{id}', 'update')->name('address.update'); // Changed to PUT for update
+    Route::delete('/delete/{id}', 'delete')->name('address.delete'); // Changed to DELETE for delete
+    Route::get('/show/{id}', 'show')->name('address.show'); // Changed to GET for show
 });
 
+// Authenticated user route
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
-
