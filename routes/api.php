@@ -1,11 +1,12 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\User\AddressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 
-Route::prefix('group')->group(function () {
+Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->name('register');
     Route::post('/verify-email', [AuthController::class, 'VerifyEmail'])->name('verify.email');
     Route::post('/verify-phone-number', [AuthController::class, 'VerifyPhoneNumber'])->name('verify.phone');
@@ -18,6 +19,13 @@ Route::prefix('group')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'ForgotPassword'])->name('forgot.password');
 });
 
+
+Route::prefix('address')->group(function (){
+   Route::post('/create', [AddressController::class, 'create'])->name('address.create');
+   Route::post('/update/{id}', [AddressController::class, 'update'])->name('address.update');
+   Route::post('/delete/{id}', [AddressController::class, 'delete'])->name('address.delete');
+   Route::post('/show/{id}', [AddressController::class, 'show'])->name('address.show');
+});
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

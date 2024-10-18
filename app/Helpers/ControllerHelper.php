@@ -16,6 +16,21 @@ class ControllerHelper {
         return $validator->validated();
     }
 
+    public static function checkUserHasToken(Request $request)
+    {
+        $user = $request->user();
+        if ($user && !empty($user->remember_token)) {
+            return $user;
+        }
+
+        return response()->json([
+            'status' => 404,
+            'message' => 'Token not found for the user.',
+        ], 404);
+    }
+
+
+
     public static function checkUserByEmailOrRespond(string $email)
     {
         $user = User::query()->where('email', $email)->first();
