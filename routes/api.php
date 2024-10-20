@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Order\OrderController;
 use App\Http\Controllers\Store\ProductController;
 use App\Http\Controllers\Store\StoreController;
 use App\Http\Controllers\User\AddressController;
@@ -53,6 +54,7 @@ Route::prefix('store')->controller(StoreController::class)->group(function () {
 });
 
 
+
 Route::prefix('cart')->controller(CartController::class)->group(function (){
     Route::post('/create', 'create')->name('cart.create');
     Route::put('/update', 'update')->name('cart.update'); // Changed to PUT for update
@@ -64,6 +66,11 @@ Route::prefix('favorite')->controller(CartController::class)->group(function (){
     Route::post('/create', 'create')->name('favorite.create');
     Route::delete('/delete', 'delete')->name('favorite.delete'); // Changed to DELETE for delete
     Route::get('/show', 'show')->name('favorite.show'); // Changed to GET for show
+});
+
+Route::prefix('order')->controller(OrderController::class)->group(function (){
+    Route::post('/create', 'order')->name('order.create');
+    Route::get('/show', 'show')->name('order.show'); // Changed to GET for show
 });
 
 
