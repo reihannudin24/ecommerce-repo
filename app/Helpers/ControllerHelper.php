@@ -2,6 +2,8 @@
 
 namespace App\Helpers;
 
+use App\Models\PivotUserInStore;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -38,6 +40,22 @@ class ControllerHelper {
             return ResponseHelper::responseJson(401, 'Email not registered', [], '/register');
         }
         return $user;
+    }
+
+
+    public static function checkStoreByEmailStoreAndUserPivot(string $email, int $user_id){
+        $store = Store::query()->where('email' , $email)->first();
+        $pivot = PivotUserInStore::query()->where('user_id' , $user_id)->where('store_id' ,$store->id)->first();
+
+        if (!$pivot){
+            return ResponseHelper::responseJson(401, 'You not a member of ', [], '/register');
+        }
+
+        if (!$store) {
+            return ResponseHelper::responseJson(401, 'Store not there', [], '/register');
+        }
+
+        return $store;
     }
 
     public static function checkUserByEmailAndSessionOrRespond(string $email, string $session)
