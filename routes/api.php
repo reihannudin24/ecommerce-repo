@@ -34,6 +34,10 @@ Route::prefix('product')->controller(ProductController::class)->group(function (
     Route::post('/create', 'create')->name('product.create');
     Route::put('/update/{id}', 'update')->name('product.update'); // Changed to PUT for update
     Route::delete('/delete/{id}', 'delete')->name('product.delete'); // Changed to DELETE for delete
+    Route::post('/create/type', 'createTyper')->name('product.type.create');
+    Route::put('/update/type/{id}', 'updateTyper')->name('product.type.update'); // Changed to PUT for update
+    Route::delete('/delete/type/{id}', 'deleteTyper')->name('product.type.delete'); // Changed to DELETE for delete
+
     Route::get('/show/{id}', 'show')->name('address.show'); // Changed to GET for show
 });
 
