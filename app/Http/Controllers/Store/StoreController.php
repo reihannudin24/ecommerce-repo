@@ -19,7 +19,7 @@ use SebastianBergmann\Diff\Exception;
 
 class StoreController extends Controller
 {
-    public function registred(Request $request){
+    public function registered(Request $request){
         $user = ControllerHelper::checkUserHasToken($request);
         $rules = [
             'name' => 'required',

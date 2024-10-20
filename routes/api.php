@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Store\ProductController;
+use App\Http\Controllers\Store\StoreController;
 use App\Http\Controllers\User\AddressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +28,25 @@ Route::prefix('address')->controller(AddressController::class)->group(function (
     Route::delete('/delete/{id}', 'delete')->name('address.delete'); // Changed to DELETE for delete
     Route::get('/show/{id}', 'show')->name('address.show'); // Changed to GET for show
 });
+
+// Routes for product-related actions
+Route::prefix('product')->controller(ProductController::class)->group(function () {
+    Route::post('/create', 'create')->name('product.create');
+    Route::put('/update/{id}', 'update')->name('product.update'); // Changed to PUT for update
+    Route::delete('/delete/{id}', 'delete')->name('product.delete'); // Changed to DELETE for delete
+    Route::get('/show/{id}', 'show')->name('address.show'); // Changed to GET for show
+});
+
+
+Route::prefix('store')->controller(StoreController::class)->group(function () {
+    Route::post('/registered', 'registered')->name('store.registered');
+    Route::post('/update', 'update')->name('store.update');
+    Route::post('/update-status', 'updateStatus')->name('store.update-status');
+    Route::post('/show', 'show')->name('store.show');
+    Route::post('/login', 'login')->name('store.login');
+    Route::post('/logout', 'logout')->name('store.logout');
+});
+
 
 // Authenticated user route
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
