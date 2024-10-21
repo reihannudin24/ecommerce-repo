@@ -28,6 +28,16 @@ Route::middleware('auth:sanctum')->group(function (){
         Route::post('/logout', 'logout')->name('auth.logout');
     });
 
+    Route::prefix('store')->controller(StoreController::class)->group(function () {
+        Route::post('/registered', 'registered')->name('store.registered');
+        Route::post('/update', 'update')->name('store.update'); // Added {id} parameter
+        Route::post('/update-status', 'updateStatus')->name('store.update-status'); // Added {id} parameter
+        Route::get('/show/{id?}', 'show')->name('store.show'); // Changed to GET and added optional {id} parameter
+        Route::post('/login', 'login')->name('store.login');
+        Route::post('/logout', 'logout')->name('store.logout');
+    });
+
+
 });
 
 
@@ -53,15 +63,6 @@ Route::prefix('product')->controller(ProductController::class)->group(function (
     Route::get('/show/{id}', 'show')->name('address.show'); // Changed to GET for show
 });
 
-
-Route::prefix('store')->controller(StoreController::class)->group(function () {
-    Route::post('/registered', 'registered')->name('store.registered');
-    Route::post('/update', 'update')->name('store.update');
-    Route::post('/update-status', 'updateStatus')->name('store.update-status');
-    Route::post('/show', 'show')->name('store.show');
-    Route::post('/login', 'login')->name('store.login');
-    Route::post('/logout', 'logout')->name('store.logout');
-});
 
 
 

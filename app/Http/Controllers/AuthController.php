@@ -179,8 +179,6 @@ class AuthController extends Controller
         }
     }
 
-
-
     public function AddPassword(Request $request)
     {
         $rules = [
