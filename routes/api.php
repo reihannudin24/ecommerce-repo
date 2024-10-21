@@ -11,17 +11,25 @@ use Illuminate\Support\Facades\Route;
 
 // Routes for authentication-related actions
 Route::prefix('auth')->controller(AuthController::class)->group(function () {
-    Route::post('/register', 'register')->name('auth.register');
-    Route::post('/verify-email', 'verifyEmail')->name('auth.verify.email');
-    Route::post('/verify-phone-number', 'verifyPhoneNumber')->name('auth.verify.phone');
-    Route::post('/send-email-code', 'sendEmailCode')->name('auth.send.email.code');
-    Route::post('/send-phone-number-code', 'sendPhoneNumberCode')->name('auth.send.phone.number.code');
+    Route::post('/register', 'Register')->name('auth.register');
+    Route::post('/send-email-code', 'SendEmailCode')->name('auth.send.email.code');
+    Route::post('/verify-email', 'VerifyEmail')->name('auth.verify.email');
+    Route::post('/verify-phone-number', 'VerifyPhoneNumber')->name('auth.verify.phone');
+    Route::post('/send-phone-number-code', 'SendPhoneNumberCode')->name('auth.send.phone.number.code');
     Route::post('/add-password', 'addPassword')->name('auth.add.password');
-    Route::post('/add-phone-number', 'addPhoneNumber')->name('auth.add.phone.number');
     Route::post('/add-information', 'addInformation')->name('auth.add.information');
     Route::post('/login', 'login')->name('auth.login');
+    Route::post('/logout', 'logout')->name('auth.logout');
     Route::post('/forgot-password', 'forgotPassword')->name('auth.forgot.password');
 });
+
+Route::middleware('auth:sanctum')->group(function (){
+    Route::prefix('auth')->controller(AuthController::class)->group(function () {
+        Route::post('/logout', 'logout')->name('auth.logout');
+    });
+
+});
+
 
 // Routes for address-related actions
 Route::prefix('address')->controller(AddressController::class)->group(function () {
@@ -30,6 +38,8 @@ Route::prefix('address')->controller(AddressController::class)->group(function (
     Route::delete('/delete/{id}', 'delete')->name('address.delete'); // Changed to DELETE for delete
     Route::get('/show/{id}', 'show')->name('address.show'); // Changed to GET for show
 });
+
+
 
 // Routes for product-related actions
 Route::prefix('product')->controller(ProductController::class)->group(function () {

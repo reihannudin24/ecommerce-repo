@@ -7,128 +7,47 @@ use App\Helpers\ResponseHelper;
 use App\Mail\EmailVerificationMail;
 use App\Mail\PasswordResetMail;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+
+    public function Register(Request $request)
     {
-        $rules = [
-            'email' => 'required|email|unique:users,email',
-        ];
-
+        $rules = ['email' => 'required|email|unique:users,email'];
         $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
-        if (!is_array($validatedData)) {
-            return $validatedData;
-        }
+        if (!is_array($validatedData)) return $validatedData;
 
-        $userCheckResponse = ControllerHelper::checkUserByEmailOrRespond($validatedData['email']);
-        if ($userCheckResponse !== true) {
-            return $userCheckResponse;
-        }
+        ControllerHelper::checkUserByEmailRegitered($validatedData['email']);
 
         DB::beginTransaction();
-
         try {
+            $sessionToken = Str::random(60);
             $user = User::create([
                 'email' => $validatedData['email'],
+                'session' => $sessionToken
             ]);
-
             DB::commit();
-            return ResponseHelper::responseJson(201, 'Berhasil menambahkan pengguna', [
-                'user' => [
-                    'id' => $user->id,
-                    'email' => $user->email,
-                ]
+            return ResponseHelper::responseJson(201, 'User registered successfully', [
+                'user' => ['id' => $user->id, 'email' => $user->email, 'session' => $user->session]
             ], '/verify-email');
         } catch (\Exception $e) {
             DB::rollBack();
             return ResponseHelper::responseJson(500, 'Registration failed: ' . $e->getMessage(), [], '/register');
         }
     }
-    public function VerifyEmail(Request $request)
-    {
-        $rules = [
-            'email' => 'required|email',
-            'code' => 'required',
-            'session' => 'required'
-        ];
-
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
-        if (!is_array($validatedData)) {
-            return $validatedData;
-        }
-
-        $user = ControllerHelper::checkUserByEmailAndSessionOrRespond($validatedData['email'], $validatedData['session']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
-        if ($user->verify_code !== $validatedData['code']) {
-            return ResponseHelper::responseJson(401, 'Verify code is not correct', [], '/verify-email');
-        }
-
-        try {
-            DB::transaction(function () use ($user) {
-                $user->update(['email_verify' => true]);
-            });
-
-            return ResponseHelper::responseJson(201, 'Email verified successfully', [
-                'user' => [
-                    'id' => $user->id,
-                    'email_verify' => $user->email_verify
-                ]
-            ], '/add-password');
-        } catch (\Exception $e) {
-            return ResponseHelper::responseJson(500, 'Internal Server Error', [], '/verify-email');
-        }
-    }
-    public function VerifyPhoneNumber(Request $request)
-    {
-        $rules = [
-            'phone_number' => 'required',
-            'code' => 'required',
-            'session' => 'required'
-        ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
-        if (!is_array($validatedData)) {
-            return $validatedData;
-        }
-
-        $user = ControllerHelper::checkUserByPhoneAndSessionOrRespond($validatedData['phone_number'], $validatedData['session']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
-        if ($user->verify_code !== $validatedData['code']) {
-            return ResponseHelper::responseJson(401, 'Verify code is not correct', [], '/verify-email');
-        }
-
-        try {
-            DB::transaction(function () use ($user) {
-                $user->update(['phone_number_verify' => true]);
-            });
-            return ResponseHelper::responseJson(201, 'Phone verified successfully', [
-                'user' => [
-                    'id' => $user->id,
-                    'phone_number_verify' => $user->phone_number_verify
-                ]
-            ], '/add-password');
-        } catch (\Exception $e) {
-            return ResponseHelper::responseJson(500, 'Internal Server Error', [], '/verify-email');
-        }
-    }
-
     public function SendEmailCode(Request $request)
     {
-        $rules = [
-            'email' => 'required|email',
-        ];
+        $rules = ['email' => 'required|email'];
 
         $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
         if (!is_array($validatedData)) {
@@ -136,9 +55,6 @@ class AuthController extends Controller
         }
 
         $user = ControllerHelper::checkUserByEmailOrRespond($validatedData['email']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
 
         try {
             DB::transaction(function () use ($user) {
@@ -158,10 +74,47 @@ class AuthController extends Controller
             return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/verify-email');
         }
     }
+    public function VerifyEmail(Request $request)
+    {
+        $rules = [
+            'email' => 'required|email',
+            'code' => 'required',
+            'session' => 'required'
+        ];
 
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
+        if (!is_array($validatedData)) {
+            return $validatedData;
+        }
+
+        $user = ControllerHelper::checkUserByEmailAndSessionOrRespond($validatedData['email'], $validatedData['session']);
+        if ($user->email_verification_code !== $validatedData['code']) {
+            return ResponseHelper::responseJson(401, 'Email verify code is not correct', [], '/verify-email');
+        }
+
+        try {
+            DB::transaction(function () use ($user) {
+                $user->update([
+                    'email_verify' => true,
+                    'email_verified_at' => Carbon::now()
+                ]);
+            });
+
+            return ResponseHelper::responseJson(201, 'Email verified successfully', [
+                'user' => [
+                    'id' => $user->id,
+                    'email_verify' => $user->email_verify,
+                    'email_verified_at' => $user->email_verified_at
+                ]
+            ], '/add-password');
+        } catch (\Exception $e) {
+            return ResponseHelper::responseJson(500, 'Internal Server Error', [], '/verify-email');
+        }
+    }
     public function SendPhoneNumberCode(Request $request)
     {
         $rules = [
+            'email' => 'required|email', // Validates a typical phone number length
             'phone_number' => 'required|digits_between:10,15', // Validates a typical phone number length
         ];
         $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
@@ -170,27 +123,63 @@ class AuthController extends Controller
         }
 
         $user = ControllerHelper::checkUserByEmailOrRespond($validatedData['email']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
+
         try {
             $randomNumber = mt_rand(100000, 999999);
-            DB::transaction(function () use ($randomNumber, $user) {
-                $user->update(['code_phone_number' => $randomNumber]);
+            DB::transaction(function () use ($randomNumber, $user, $validatedData) {
+                $user->update([
+                    'phone_number' => $validatedData['phone_number'],
+                    'phone_number_verification_code' => $randomNumber
+                ]);
             });
-
-            // Optionally, send the SMS/WhatsApp code here using an external service (e.g., Twilio, Textbelt)
 
             return ResponseHelper::responseJson(201, 'Phone number verification code sent successfully', [
                 'user' => [
                     'id' => $user->id,
-                    'phone_number_verify_code' => $user->code_phone_number // Returning the verification code
+                    'phone_number_verification_code' => $user->phone_number_verification_code
                 ]
             ], '/add-password');
         } catch (\Exception $e) {
             return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/verify-email');
         }
     }
+    public function VerifyPhoneNumber(Request $request)
+    {
+        $rules = [
+            'phone_number' => 'required',
+            'code' => 'required',
+            'session' => 'required'
+        ];
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
+        if (!is_array($validatedData)) {
+            return $validatedData;
+        }
+
+        $user = ControllerHelper::checkUserByPhoneAndSessionOrRespond($validatedData['phone_number'], $validatedData['session']);
+        if ($user->phone_number_verification_code !== $validatedData['code']) {
+            return ResponseHelper::responseJson(401, 'Phone number verify code is not correct', [], '/verify-email');
+        }
+
+        try {
+            DB::transaction(function () use ($user) {
+                $user->update([
+                    'phone_number_verify' => true,
+                    'phone_number_verified_at' => Carbon::now()
+                ]);
+            });
+            return ResponseHelper::responseJson(201, 'Phone verified successfully', [
+                'user' => [
+                    'id' => $user->id,
+                    'phone_number_verify' => $user->phone_number_verify,
+                    'phone_number_verified_at' => $user->phone_number_verified_at
+                ]
+            ], '/add-password');
+        } catch (\Exception $e) {
+            return ResponseHelper::responseJson(500, 'Internal Server Error', [], '/verify-email');
+        }
+    }
+
+
 
     public function AddPassword(Request $request)
     {
@@ -205,9 +194,6 @@ class AuthController extends Controller
         }
 
         $user = ControllerHelper::checkUserBySessionOrRespond($validatedData['session']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
         $hashedPassword = Hash::make($validatedData['password']);
 
         try {
@@ -219,37 +205,7 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'email' => $user->email
                 ]
-            ], '/verify-email');
-        } catch (\Exception $e) {
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/verify-email');
-        }
-    }
-    public function AddPhoneNumber(Request $request)
-    {
-        $rules = [
-            'phone_number' => 'required',
-            'session' => 'required'
-        ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
-        if (!is_array($validatedData)) {
-            return $validatedData;
-        }
-
-        $user = ControllerHelper::checkUserBySessionOrRespond($validatedData['session']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
-
-        try {
-            DB::transaction(function () use ($user, $validatedData) {
-                $user->update(['phone_number' => $validatedData['phone_number']]);
-            });
-            return ResponseHelper::responseJson(201, 'Phone number added successfully', [
-                'user' => [
-                    'id' => $user->id,
-                    'phone_number' => $user->phone_number
-                ]
-            ], '/verify-email');
+            ], '/add-information');
         } catch (\Exception $e) {
             return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/verify-email');
         }
@@ -267,11 +223,7 @@ class AuthController extends Controller
         if (!is_array($validatedData)) {
             return $validatedData;
         }
-
         $user = ControllerHelper::checkUserBySessionOrRespond($validatedData['session']);
-        if ($user instanceof \Illuminate\Http\JsonResponse) {
-            return $user;
-        }
 
         try {
             DB::transaction(function () use ($user, $validatedData) {
@@ -281,7 +233,6 @@ class AuthController extends Controller
                     'username' => $validatedData['username'],
                 ]);
             });
-
             return ResponseHelper::responseJson(201, 'Information added successfully', [
                 'user' => [
                     'id' => $user->id,
@@ -325,6 +276,28 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'email' => $user->email,
                     'token' => $user->remember_token
+                ]
+            ], '/dashboard');
+        } catch (\Exception $e) {
+            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+        }
+    }
+
+    public function Logout(Request $request)
+    {
+        $user = ControllerHelper::checkUserHasToken($request);
+        try {
+            DB::transaction(function () use ($user, $request) {
+                $request->user()->currentAccessToken()->delete();
+                User::query()->where('id', $user->id)->update([
+                    'remember_token' => null
+                ]);
+            });
+            return ResponseHelper::responseJson(201, 'Logout successful', [
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'token' => $user->null
                 ]
             ], '/dashboard');
         } catch (\Exception $e) {

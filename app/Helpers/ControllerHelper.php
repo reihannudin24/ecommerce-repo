@@ -21,7 +21,7 @@ class ControllerHelper {
     public static function checkUserHasToken(Request $request)
     {
         $user = $request->user();
-        if ($user && !empty($user->remember_token)) {
+        if ($user) {
             return $user;
         }
 
@@ -42,6 +42,14 @@ class ControllerHelper {
         return $user;
     }
 
+    public static function checkUserByEmailRegitered(string $email)
+    {
+        $user = User::query()->where('email', $email)->first();
+        if ($user) {
+            return ResponseHelper::responseJson(401, 'Email already registered', [], '/register');
+        }
+        return $user;
+    }
 
     public static function checkStoreByEmailStoreAndUserPivot(string $email, int $user_id){
         $store = Store::query()->where('email' , $email)->first();
