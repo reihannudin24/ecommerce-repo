@@ -36,8 +36,6 @@ Route::middleware('auth:sanctum')->group(function (){
         Route::post('/login', 'login')->name('store.login');
         Route::post('/logout', 'logout')->name('store.logout');
     });
-
-
 });
 
 

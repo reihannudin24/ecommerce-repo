@@ -18,37 +18,41 @@ use SebastianBergmann\Diff\Exception;
 
 class ProductController extends Controller
 {
-
-    public function create(Request $request){
+    public function create(Request $request)
+    {
         $user = ControllerHelper::checkUserHasToken($request);
         $rules = [
             'name' => 'required',
             'description' => 'required',
-            'price' => 'required',
+            'price' => 'required|numeric',
             'categories' => 'required',
             'type' => 'required',
-            'quantity' => 'required',
-            'image' => 'required',
-            'store_id' => 'required',
-            'store_email' => 'required',
-            'password' => 'required'
+            'quantity' => 'required|integer',
+            'images' => 'nullable|file|mimes:jpg,jpeg,png',
+            'store_id' => 'required|integer',
         ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error' , '/register');
-        if (!is_array($validatedData)){
+
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
+        if (!is_array($validatedData)) {
             return $validatedData;
         }
 
-        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($validatedData['store_email'] , $user->id );
-        if ($store instanceof  \Illuminate\Http\JsonResponse){
-            return  $store;
+        $getStore = Store::query()->where('id', $validatedData['store_id'])->first();
+        if (!$getStore){
+            return ResponseHelper::responseJson(401, 'Store not found', [], '/register');
         }
 
+        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($getStore->store_email, $user->id);
+
         try {
-            $imageUrl = $request->hasFile('images') ?
-                Storage::url($request->file('images')->store('upload/product' , 'public'))
+            $imageUrl = $request->hasFile('images')
+                ? Storage::url($request->file('images')->store('upload/products', 'public'))
                 : null;
+
+            $uniqueId = Str::random(16);
             $slug = Str::slug($validatedData['name'], '_');
-            DB::transaction(function () use ($store, $user, $validatedData, $slug, $imageUrl) {
+
+            DB::transaction(function () use ($store, $validatedData, $slug, $uniqueId, $imageUrl) {
                 Product::create([
                     'name' => $validatedData['name'],
                     'slug' => $slug,
@@ -58,67 +62,71 @@ class ProductController extends Controller
                     'type' => $validatedData['type'],
                     'quantity' => $validatedData['quantity'],
                     'image' => $imageUrl,
-                    'unique_id' => $validatedData['unique_id'],
-                    'store_id' => $validatedData['store_id'],
+                    'unique_id' => $uniqueId,
+                    'store_id' => 'required|integer',
                 ]);
             });
 
-            return ResponseHelper::responseJson(201, 'Login to store successful', [
-                'store' => [
+            $product = Product::where('store_id', $store->id)->latest()->first();
+
+            return ResponseHelper::responseJson(201, 'Product created successfully', [
+                'product' => [
                     'store' => $store->email,
-                    'user' => $user->email,
+                    'product' => $product,
                 ]
             ], '/dashboard');
-        }   catch (Exception $e){
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+        } catch (Exception $e) {
+            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/dashboard');
         }
     }
 
-    public function update(Request $request, $id){
+    public function update(Request $request, $id)
+    {
         $user = ControllerHelper::checkUserHasToken($request);
         $rules = [
             'name' => 'required',
             'description' => 'required',
-            'price' => 'required',
+            'price' => 'required|numeric',
             'categories' => 'required',
             'type' => 'required',
-            'quantity' => 'required',
-            'image' => 'required',
-            'store_id' => 'required',
-            'store_email' => 'required',
-            'password' => 'required'
+            'quantity' => 'required|integer',
+            'images' => 'nullable|file|mimes:jpg,jpeg,png',
+            'store_id' => 'required|integer',
         ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error' , '/register');
-        if (!is_array($validatedData)){
+
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
+        if (!is_array($validatedData)) {
             return $validatedData;
         }
 
-        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($validatedData['store_email'] , $user->id );
-        if ($store instanceof  \Illuminate\Http\JsonResponse){
-            return  $store;
+        $getStore = Store::query()->where('id', $validatedData['store_id'])->first();
+        if (!$getStore){
+            return ResponseHelper::responseJson(401, 'Store not found', [], '/register');
         }
 
-        $products = Product::query()->where('id' , $id)->first();
-        if (!$products){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
+        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($getStore->store_email, $user->id);
+
+        $product = Product::query()->where('id' , $id)->where('store_id', $store->id)->first();
+
+        if (!$product) {
+            return ResponseHelper::responseJson(404, 'Product not found', [], '/dashboard');
         }
 
         try {
-            $slug = Str::slug($validatedData['name'], '_');
-
             if ($request->hasFile('images')) {
-                if ($products->image){
-                    $oldThumbnailPath = str_replace('/storage/' , '', $products->image);
-                    Storage::disk('public')->delete($oldThumbnailPath);
+                if ($product->image) {
+                    $oldImagePath = str_replace('/storage/', '', $product->image);
+                    Storage::disk('public')->delete($oldImagePath);
                 }
 
-                $imagePath = $request->file('images')->store('upload/product', 'public');
-                $imageUrl = Storage::url($imagePath);
-                $products->image = $imageUrl;
+                $imagePath = $request->file('images')->store('upload/products', 'public');
+                $product->image = Storage::url($imagePath);
             }
 
-            DB::transaction(function () use ($store, $products, $validatedData, $slug) {
-                Product::query()->where('id', $products->id)->update([
+            $slug = Str::slug($validatedData['name'], '_');
+
+            DB::transaction(function () use ($product, $validatedData, $slug) {
+                $product->update([
                     'name' => $validatedData['name'],
                     'slug' => $slug,
                     'description' => $validatedData['description'],
@@ -126,112 +134,103 @@ class ProductController extends Controller
                     'categories' => $validatedData['categories'],
                     'type' => $validatedData['type'],
                     'quantity' => $validatedData['quantity'],
-                    'unique_id' => $validatedData['unique_id'],
-                    'store_id' => $store->id,
                 ]);
             });
 
-            return ResponseHelper::responseJson(201, 'Success update product', [
-                'store' => [
-                    'store' => $store->email,
-                    'user' => $user->email,
-                ]
+            return ResponseHelper::responseJson(200, 'Product updated successfully', [
+                'product' => $product
             ], '/dashboard');
-        }   catch (Exception $e){
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+        } catch (Exception $e) {
+            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/dashboard');
         }
     }
 
-    public function delete(Request $request, $id){
-        $user = ControllerHelper::checkUserHasToken($request);
-        $rules = [
-            'name' => 'required',
-            'description' => 'required',
-            'price' => 'required',
-            'categories' => 'required',
-            'type' => 'required',
-            'quantity' => 'required',
-            'image' => 'required',
-            'store_id' => 'required',
-            'store_email' => 'required',
-            'password' => 'required'
-        ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error' , '/register');
-        if (!is_array($validatedData)){
-            return $validatedData;
-        }
-
-        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($validatedData['store_email'] , $user->id );
-        if ($store instanceof  \Illuminate\Http\JsonResponse){
-            return  $store;
-        }
-
-        $products = Product::query()->where('id' , $id)->first();
-        if (!$products){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
-        }
-
-        try {
-
-            if ($request->hasFile('images')) {
-                if ($products->image){
-                    $oldThumbnailPath = str_replace('/storage/' , '', $products->image);
-                    Storage::disk('public')->delete($oldThumbnailPath);
-                }
-                $products->image = null;
+    public function delete(Request $request)
+    {
+        {
+            $user = ControllerHelper::checkUserHasToken($request);
+            $rules = [
+                'store_id' => 'required|integer',
+            ];
+            $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error', '/register');
+            if (!is_array($validatedData)) {
+                return $validatedData;
             }
 
-            DB::transaction(function () use ($products) {
-                Product::query()->where('id', $products->id)->delete();
-            });
+            $getStore = Store::query()->where('id', $validatedData['store_id'])->first();
+            if (!$getStore) {
+                return ResponseHelper::responseJson(401, 'Store not found', [], '/register');
+            }
 
-            return ResponseHelper::responseJson(201, 'Success delete product', [
-                'store' => [
-                    'store' => $store->email,
-                    'user' => $user->email,
-                ]
-            ], '/dashboard');
-        }   catch (Exception $e){
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+            $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($getStore->store_email, $user->id);
+            $product = Product::query()->where('id', $validatedData['id'])->where('store_id', $store->id)->first();
+
+            if (!$product) {
+                return ResponseHelper::responseJson(404, 'Product not found', [], '/dashboard');
+            }
+
+            try {
+                DB::transaction(function () use ($product) {
+                    if ($product->image) {
+                        $oldImagePath = str_replace('/storage/', '', $product->image);
+                        Storage::disk('public')->delete($oldImagePath);
+                    }
+                    $product->delete();
+                });
+
+                return ResponseHelper::responseJson(200, 'Product deleted successfully', [], '/dashboard');
+            } catch (Exception $e) {
+                return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/dashboard');
+            }
         }
     }
 
-    public function addType(Request $request){
+
+    // Inside ProductController.php
+
+    public function addType(Request $request)
+    {
         $user = ControllerHelper::checkUserHasToken($request);
         $rules = [
             'name' => 'required',
             'description' => 'required',
-            'price' => 'required',
+            'price' => 'required|numeric',
             'categories' => 'required',
             'type' => 'required',
-            'quantity' => 'required',
-            'image' => 'required',
-            'store_id' => 'required',
-            'product_id' => 'required',
-            'store_email' => 'required',
-            'password' => 'required'
+            'quantity' => 'required|integer',
+            'images' => 'nullable|file|mimes:jpg,jpeg,png',
+            'store_id' => 'required|integer',
+            'product_id' => 'required|integer',
         ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error' , '/register');
-        if (!is_array($validatedData)){
+
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation failed', '/add-type');
+        if (!is_array($validatedData)) {
             return $validatedData;
         }
 
-        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($validatedData['store_email'] , $user->id );
-        if ($store instanceof  \Illuminate\Http\JsonResponse){
-            return  $store;
+        $getStore = Store::find($validatedData['store_id']);
+        if (!$getStore) {
+            return ResponseHelper::responseJson(404, 'Store not found', [], '/add-type');
         }
 
-        $products = Product::query()->where('id' , $validatedData['product_id'])->first();
-        if (!$products){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
+        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($getStore->store_email, $user->id);
+        if ($store instanceof \Illuminate\Http\JsonResponse) {
+            return $store;
+        }
+
+        $product = Product::find($validatedData['product_id']);
+        if (!$product) {
+            return ResponseHelper::responseJson(404, 'Product not found', [], '/add-type');
         }
 
         try {
-            $imageUrl = $request->hasFile('images') ?
-                Storage::url($request->file('images')->store('upload/product' , 'public'))
+            $imageUrl = $request->hasFile('images')
+                ? Storage::url($request->file('images')->store('upload/product/type', 'public'))
                 : null;
             $slug = Str::slug($validatedData['name'], '_');
-            DB::transaction(function () use ($store, $user, $validatedData, $slug, $imageUrl) {
+            $uniqueId = Str::random(16);
+
+            DB::transaction(function () use ($store, $product, $validatedData, $slug, $imageUrl, $uniqueId) {
                 TypeProduct::create([
                     'name' => $validatedData['name'],
                     'slug' => $slug,
@@ -241,75 +240,74 @@ class ProductController extends Controller
                     'type' => $validatedData['type'],
                     'quantity' => $validatedData['quantity'],
                     'image' => $imageUrl,
-                    'product_id' => $validatedData['product_id'],
-                    'unique_id' => $validatedData['unique_id'],
-                    'store_id' => $validatedData['store_id'],
+                    'product_id' => $product->id,
+                    'unique_id' => $uniqueId,
+                    'store_id' => $store->id,
                 ]);
             });
 
-            return ResponseHelper::responseJson(201, 'Login to store successful', [
-                'store' => [
-                    'store' => $store->email,
-                    'user' => $user->email,
-                ]
-            ], '/dashboard');
-        }   catch (Exception $e){
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+            return ResponseHelper::responseJson(201, 'Type added successfully', [], '/dashboard');
+        } catch (\Exception $e) {
+            return ResponseHelper::responseJson(500, 'An error occurred while adding the type', ['error' => $e->getMessage()], '/dashboard');
         }
     }
 
-
-    public function updateType(Request $request, $id){
+    public function updateType(Request $request)
+    {
         $user = ControllerHelper::checkUserHasToken($request);
         $rules = [
+            'id' => 'required|integer',
             'name' => 'required',
             'description' => 'required',
-            'price' => 'required',
+            'price' => 'required|numeric',
             'categories' => 'required',
             'type' => 'required',
-            'quantity' => 'required',
-            'image' => 'required',
-            'store_id' => 'required',
-            'product_id' => 'required',
-            'store_email' => 'required',
-            'password' => 'required'
+            'quantity' => 'required|integer',
+            'images' => 'nullable|file|mimes:jpg,jpeg,png',
+            'store_id' => 'required|integer',
+            'product_id' => 'required|integer',
         ];
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error' , '/register');
-        if (!is_array($validatedData)){
+
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation failed', '/update-type');
+        if (!is_array($validatedData)) {
             return $validatedData;
         }
 
-        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($validatedData['store_email'] , $user->id );
-        if ($store instanceof  \Illuminate\Http\JsonResponse){
-            return  $store;
+        $getStore = Store::find($validatedData['store_id']);
+        if (!$getStore) {
+            return ResponseHelper::responseJson(404, 'Store not found', [], '/update-type');
         }
 
-        $products = Product::query()->where('id' , $validatedData['product_id'])->first();
-        if (!$products){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
+        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($getStore->store_email, $user->id);
+        if ($store instanceof \Illuminate\Http\JsonResponse) {
+            return $store;
         }
 
-        $typeProducts = TypeProduct::query()->where('id' , $id)->first();
-        if (!$typeProducts){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
+        $product = Product::find($validatedData['product_id']);
+        if (!$product) {
+            return ResponseHelper::responseJson(404, 'Product not found', [], '/update-type');
+        }
+
+        $typeProduct = TypeProduct::find($validatedData['id']);
+        if (!$typeProduct) {
+            return ResponseHelper::responseJson(404, 'Type not found', [], '/update-type');
         }
 
         try {
-            $slug = Str::slug($validatedData['name'], '_');
-
             if ($request->hasFile('images')) {
-                if ($products->image){
-                    $oldThumbnailPath = str_replace('/storage/' , '', $products->image);
-                    Storage::disk('public')->delete($oldThumbnailPath);
+                if ($typeProduct->image) {
+                    $oldImagePath = str_replace('/storage/', '', $typeProduct->image);
+                    Storage::disk('public')->delete($oldImagePath);
                 }
 
-                $imagePath = $request->file('images')->store('upload/product', 'public');
-                $imageUrl = Storage::url($imagePath);
-                $products->image = $imageUrl;
+                $imagePath = $request->file('images')->store('upload/product/type', 'public');
+                $typeProduct->image = Storage::url($imagePath);
             }
 
-            DB::transaction(function () use ($store, $products, $validatedData, $slug , $id) {
-                TypeProduct::query()->where('id', $id)->where('product_id', $validatedData['product_id'])->update([
+            $slug = Str::slug($validatedData['name'], '_');
+
+            DB::transaction(function () use ($typeProduct, $validatedData, $slug) {
+                $typeProduct->update([
                     'name' => $validatedData['name'],
                     'slug' => $slug,
                     'description' => $validatedData['description'],
@@ -317,73 +315,55 @@ class ProductController extends Controller
                     'categories' => $validatedData['categories'],
                     'type' => $validatedData['type'],
                     'quantity' => $validatedData['quantity'],
-                    'unique_id' => $validatedData['unique_id'],
-                    'store_id' => $store->id,
                 ]);
             });
 
-            return ResponseHelper::responseJson(201, 'Success update product', [
-                'store' => [
-                    'store' => $store->email,
-                    'user' => $user->email,
-                ]
-            ], '/dashboard');
-        }   catch (Exception $e){
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+            return ResponseHelper::responseJson(200, 'Type updated successfully', [], '/dashboard');
+        } catch (\Exception $e) {
+            return ResponseHelper::responseJson(500, 'An error occurred while updating the type', ['error' => $e->getMessage()], '/dashboard');
         }
     }
 
-    public function deleteType(Request $request , $id){
+    public function deleteType(Request $request)
+    {
         $user = ControllerHelper::checkUserHasToken($request);
         $rules = [
-            'store_id' => 'required',
-            'store_email' => 'required',
-            'password' => 'required'
+            'id' => 'required|integer',
+            'store_id' => 'required|integer',
         ];
 
-        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation error' , '/register');
-        if (!is_array($validatedData)){
+        $validatedData = ControllerHelper::validateRequest($request, $rules, 422, 'Validation failed', '/delete-type');
+        if (!is_array($validatedData)) {
             return $validatedData;
         }
 
-        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($validatedData['store_email'] , $user->id );
-        if ($store instanceof  \Illuminate\Http\JsonResponse){
-            return  $store;
+        $getStore = Store::find($validatedData['store_id']);
+        if (!$getStore) {
+            return ResponseHelper::responseJson(404, 'Store not found', [], '/delete-type');
         }
 
-        $products = Product::query()->where('id' , $validatedData['product_id'])->first();
-        if (!$products){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
+        $store = ControllerHelper::checkStoreByEmailStoreAndUserPivot($getStore->store_email, $user->id);
+        if ($store instanceof \Illuminate\Http\JsonResponse) {
+            return $store;
         }
 
-        $typeProducts = TypeProduct::query()->where('id' , $id)->first();
-        if (!$typeProducts){
-            return ResponseHelper::responseJson(401, 'product not found ', [], '/register');
+        $typeProduct = TypeProduct::find($validatedData['id']);
+        if (!$typeProduct) {
+            return ResponseHelper::responseJson(404, 'Type not found', [], '/delete-type');
         }
-
 
         try {
-
-            if ($request->hasFile('images')) {
-                if ($typeProducts->image){
-                    $oldThumbnailPath = str_replace('/storage/' , '', $typeProducts->image);
-                    Storage::disk('public')->delete($oldThumbnailPath);
+            DB::transaction(function () use ($typeProduct) {
+                if ($typeProduct->image) {
+                    $oldImagePath = str_replace('/storage/', '', $typeProduct->image);
+                    Storage::disk('public')->delete($oldImagePath);
                 }
-                $typeProducts->image = null;
-            }
-
-            DB::transaction(function () use ($typeProducts) {
-                TypeProduct::query()->where('id', $typeProducts->id)->delete();
+                $typeProduct->delete();
             });
 
-            return ResponseHelper::responseJson(201, 'Success delete product', [
-                'store' => [
-                    'store' => $store->email,
-                    'user' => $user->email,
-                ]
-            ], '/dashboard');
-        }   catch (Exception $e){
-            return ResponseHelper::responseJson(500, 'Internal Server Error', ['error' => $e->getMessage()], '/login');
+            return ResponseHelper::responseJson(200, 'Type deleted successfully', [], '/dashboard');
+        } catch (\Exception $e) {
+            return ResponseHelper::responseJson(500, 'An error occurred while deleting the type', ['error' => $e->getMessage()], '/dashboard');
         }
     }
 
@@ -394,7 +374,6 @@ class ProductController extends Controller
         if ($user instanceof \Illuminate\Http\JsonResponse) {
             return $user;
         }
-
 
         if ($id) {
             $product = Product::where('id', $id)->where('user_id', $user->id)->first();
